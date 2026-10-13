@@ -1,11 +1,25 @@
 import { z } from "zod";
-import { get, run } from "@/server/db";
+import { eq, sql } from "drizzle-orm";
+import { db } from "@/server/db";
+import { user as users } from "@/server/schema";
 import { clearSessionCookies, getUser, isAdmin, unauthorized } from "@/server/auth";
 import { deleteStripeCustomer } from "@/server/stripe";
 import { parseBody } from "@/server/validate";
 
-const profile = (id: string) =>
-    get(`SELECT id, email, name, plan, "createdAt" AS created_at, "updatedAt" AS updated_at FROM "user" WHERE id = ?`, [id]);
+const profile = async (id: string) =>
+    (
+        await db
+            .select({
+                id: users.id,
+                email: users.email,
+                name: users.name,
+                plan: users.plan,
+                created_at: users.createdAt,
+                updated_at: users.updatedAt,
+            })
+            .from(users)
+            .where(eq(users.id, id))
+    )[0];
 
 export async function GET(req: Request) {
     const user = await getUser(req);
@@ -18,7 +32,7 @@ export async function PUT(req: Request) {
     if (!user) return unauthorized();
     const body = await parseBody(req, z.object({ name: z.string().trim().min(1).max(100) }));
     if (body instanceof Response) return body;
-    await run(`UPDATE "user" SET name = ?, "updatedAt" = now() WHERE id = ?`, [body.name, user.id]);
+    await db.update(users).set({ name: body.name, updatedAt: sql`now()` }).where(eq(users.id, user.id));
     return Response.json(await profile(user.id));
 }
 
@@ -28,6 +42,6 @@ export async function DELETE(req: Request) {
     const user = await getUser(req);
     if (!user) return unauthorized();
     await deleteStripeCustomer(user.stripeCustomerId);
-    await run(`DELETE FROM "user" WHERE id = ?`, [user.id]);
+    await db.delete(users).where(eq(users.id, user.id));
     return Response.json({ deleted: true }, { headers: clearSessionCookies() });
 }

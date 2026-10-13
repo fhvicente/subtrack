@@ -34,10 +34,11 @@ Before you start, install Node.js 20+ and Docker.
 ```bash
 npm install
 npm run db    # starts Postgres in Docker and waits until it is healthy
+DATABASE_URL=postgres://subtrack:subtrack@localhost:5432/subtrack npm run db:migrate
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000). The tables are created on the first request. `.env.development` already points `DATABASE_URL` at the local container. To stop the container, run `docker compose down` (add `-v` to delete the data).
+Then open [http://localhost:3000](http://localhost:3000). `.env.development` already points `DATABASE_URL` at the local container (drizzle-kit doesn't read it, hence the explicit variable above). To stop the container, run `docker compose down` (add `-v` to delete the data).
 
 ### Upgrading a database from before better-auth
 
@@ -78,7 +79,11 @@ Don't point a preview deployment at the shared Neon DB before the reset.
 docker compose exec db psql -U subtrack -c "CREATE DATABASE subtrack_test"
 ```
 
-Stripe network calls are stubbed, and webhooks are signed with a test secret.
+The test run applies the migrations itself. Stripe network calls are stubbed, and webhooks are signed with a test secret.
+
+### Database changes
+
+The schema lives in `src/server/schema.ts` (Drizzle). To change it, edit that file, run `npm run db:generate` (writes a SQL migration into `drizzle/`), review the SQL and commit it with the code. `npm run db:migrate` applies pending migrations to the database in `DATABASE_URL`. The first migration, `0000_baseline`, is the schema the app used to create on its own; it only uses `CREATE TABLE IF NOT EXISTS`, so on a database that already has those tables it changes nothing and is just recorded.
 
 ## API overview
 
@@ -93,6 +98,6 @@ Stripe network calls are stubbed, and webhooks are signed with a test secret.
 
 ## Deployment
 
-The app runs on Vercel and the database on Neon. Import the repo into Vercel and set the environment variables listed above. For `DATABASE_URL`, use Neon's **pooled** connection string (the host contains `-pooler`). `vercel.json` schedules `/api/cron/renewals` every day at 08:00 UTC to send the renewal emails. When moving an existing deployment to better-auth, follow [Upgrading a database from before better-auth](#upgrading-a-database-from-before-better-auth).
+The app runs on Vercel and the database on Neon. Import the repo into Vercel and set the environment variables listed above. For `DATABASE_URL`, use Neon's **pooled** connection string (the host contains `-pooler`). Migrations are not run by the build: before deploying code that needs a new migration, run `DATABASE_URL=<Neon direct connection string> npm run db:migrate` (the direct, non-pooled string). `vercel.json` schedules `/api/cron/renewals` every day at 08:00 UTC to send the renewal emails. When moving an existing deployment to better-auth, follow [Upgrading a database from before better-auth](#upgrading-a-database-from-before-better-auth).
 
 Add a Stripe webhook that points to `https://<your-domain>/api/payments/webhook`, and put its signing secret in `STRIPE_WEBHOOK_SECRET`.

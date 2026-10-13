@@ -1,4 +1,6 @@
-import { run } from "@/server/db";
+import { eq } from "drizzle-orm";
+import { db } from "@/server/db";
+import { user as users } from "@/server/schema";
 import { getUser, unauthorized } from "@/server/auth";
 import { paymentsDisabled, stripe } from "@/server/stripe";
 
@@ -20,7 +22,7 @@ export async function POST(req: Request) {
             metadata: { userId: user.id },
         });
         customerId = customer.id;
-        await run(`UPDATE "user" SET "stripeCustomerId" = ? WHERE id = ?`, [customerId, user.id]);
+        await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.id, user.id));
     }
 
     const session = await stripe.checkout.sessions.create({

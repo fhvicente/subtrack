@@ -1,4 +1,6 @@
-import { get, run } from "@/server/db";
+import { and, eq, sql } from "drizzle-orm";
+import { db } from "@/server/db";
+import { subscriptions } from "@/server/schema";
 import { getUser, unauthorized } from "@/server/auth";
 import { parseBody } from "@/server/validate";
 import { subscriptionUpdateSchema } from "@/lib/subscription-schema";
@@ -6,18 +8,9 @@ import { subscriptionUpdateSchema } from "@/lib/subscription-schema";
 type Ctx = { params: Promise<{ id: string }> };
 
 const notFound = () => Response.json({ message: "Subscription not found" }, { status: 404 });
-const find = (id: string, userId: string) =>
-    get("SELECT * FROM subscriptions WHERE id = ? AND user_id = ?", [id, userId]);
-
-// request body key -> column
-const columns = {
-    name: "name",
-    description: "description",
-    price: "price",
-    dueDate: "due_date",
-    status: "status",
-    category: "category",
-} as const;
+const own = (id: string, userId: string) => and(eq(subscriptions.id, id), eq(subscriptions.user_id, userId));
+const find = async (id: string, userId: string) =>
+    (await db.select().from(subscriptions).where(own(id, userId)))[0];
 
 export async function GET(req: Request, { params }: Ctx) {
     const user = await getUser(req);
@@ -34,22 +27,23 @@ export async function PUT(req: Request, { params }: Ctx) {
 
     const body = await parseBody(req, subscriptionUpdateSchema);
     if (body instanceof Response) return body;
-    const fields = Object.entries(columns).filter(([key]) => body[key as keyof typeof columns] !== undefined);
-    if (!fields.length) {
+    if (!Object.keys(body).length) {
         return Response.json({ message: "No fields to update" }, { status: 400 });
     }
 
-    await run(
-        `UPDATE subscriptions SET ${fields.map(([, col]) => `${col} = ?`).join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`,
-        [...fields.map(([key]) => body[key as keyof typeof columns]), id, user.id]
-    );
-    return Response.json(await find(id, user.id));
+    const { dueDate, ...fields } = body;
+    const [updated] = await db
+        .update(subscriptions)
+        .set({ ...fields, ...(dueDate && { due_date: new Date(dueDate) }), updated_at: sql`now()` })
+        .where(own(id, user.id))
+        .returning();
+    return Response.json(updated);
 }
 
 export async function DELETE(req: Request, { params }: Ctx) {
     const user = await getUser(req);
     if (!user) return unauthorized();
     const { id } = await params;
-    const { changes } = await run("DELETE FROM subscriptions WHERE id = ? AND user_id = ?", [id, user.id]);
-    return changes ? new Response(null, { status: 204 }) : notFound();
+    const deleted = await db.delete(subscriptions).where(own(id, user.id)).returning({ id: subscriptions.id });
+    return deleted.length ? new Response(null, { status: 204 }) : notFound();
 }

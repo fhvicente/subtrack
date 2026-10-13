@@ -6,6 +6,7 @@ export default defineConfig({
     resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
     test: {
         fileParallelism: false, // files share one database
+        globalSetup: "./tests/migrate.ts",
         env: {
             DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgres://subtrack:subtrack@localhost:5432/subtrack_test",
             BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-chars",

@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { db } from "@/server/db";
 import { auth } from "@/server/better-auth";
 import * as profile from "@/app/api/users/profile/route";
 import { unauthorized } from "@/server/auth";
-import { get, run } from "@/server/db";
-import { authReq, req, reset, sessionCookie, signUp } from "./helpers";
+import { authReq, get, req, reset, run, sessionCookie, signUp } from "./helpers";
 
 const call = (path: string, opts?: { body?: unknown; token?: string }) => auth.handler(authReq(path, opts));
 const signUpBody = (over: object = {}) => ({ name: "Ana", email: "ana@test.dev", password: "secret123", ...over });
@@ -121,14 +122,22 @@ describe("sessions", () => {
     });
 });
 
-// Last: it drops every table and rebuilds the schema through a fresh module graph.
-describe("fresh deploy", () => {
-    it("a sign-up as the very first request works on an empty database", async () => {
+// Last: these drop the migration history (and the tables) and migrate again.
+describe("migrations", () => {
+    const migrateAgain = () => migrate(db, { migrationsFolder: "drizzle" });
+
+    it("the baseline is a no-op on a database created before Drizzle (production)", async () => {
+        const { user } = await signUp();
+        await run("DROP SCHEMA drizzle CASCADE");
+        await migrateAgain();
+        expect(await get(`SELECT id FROM "user" WHERE id = ?`, [user.id])).toBeDefined();
+    });
+
+    it("build an empty database where a sign-up works", async () => {
         await run(`DROP TABLE "user", subscriptions, notification_settings, payment_logs, rate_limits,
                               session, account, verification, "rateLimit" CASCADE`);
-        vi.resetModules();
-        const route = await import("@/app/api/auth/[...all]/route");
-        const res = await route.POST(authReq("/sign-up/email", { body: signUpBody() }));
-        expect(res.status).toBe(200);
+        await run("DROP SCHEMA drizzle CASCADE");
+        await migrateAgain();
+        expect((await call("/sign-up/email", { body: signUpBody() })).status).toBe(200);
     });
 });
