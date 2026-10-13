@@ -18,7 +18,8 @@ export async function POST(req: Request) {
             for (const sub of subs.data) await stripe.subscriptions.cancel(sub.id);
         } catch (error) {
             // Don't downgrade locally while Stripe keeps billing: the user would pay for a free plan.
-            console.error("Error canceling Stripe subscription:", error);
+            // Message only: the full Stripe error can carry customer ids into the Vercel logs.
+            console.error("Error canceling Stripe subscription:", (error as Error).message);
             return Response.json(
                 { success: false, message: "Could not cancel the subscription, please try again." },
                 { status: 502 }

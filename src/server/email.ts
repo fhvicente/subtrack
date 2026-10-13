@@ -31,7 +31,8 @@ export async function sendEmail(to: string, subject: string, text: string, html:
         await sgMail.send({ to, from: process.env.EMAIL_FROM!, subject, text, html });
         return true;
     } catch (error) {
-        console.error("Error sending email:", error);
+        // Message only: the provider error can echo the recipient address.
+        console.error("Error sending email:", (error as Error).message);
         return false;
     }
 }
