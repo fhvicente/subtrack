@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { CONTROLLER } from "@/lib/legal";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SubTrack";
 
@@ -10,6 +11,7 @@ export default function Footer() {
     const links = [
         { href: "/#features", label: "Features" },
         { href: "/#how-it-works", label: "How it works" },
+        { href: "/privacy", label: "Privacy" },
         ...(isAuthenticated()
             ? [{ href: "/dashboard", label: "Dashboard" }]
             : [
@@ -37,7 +39,7 @@ export default function Footer() {
                             </Link>
                         ))}
                         <a
-                            href="mailto:contact@subscriptionmanager.com"
+                            href={`mailto:${CONTROLLER.email}`}
                             className="font-semibold underline-offset-4 hover:text-acid hover:underline"
                         >
                             Contact

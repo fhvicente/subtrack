@@ -3,6 +3,7 @@ import * as admin from "@/app/api/admin/route";
 import * as adminUser from "@/app/api/admin/users/[id]/route";
 import * as renewals from "@/app/api/admin/renewals/route";
 import { get, run } from "@/server/db";
+import { stripe } from "@/server/stripe";
 import { ctx, inDays, req, reset, signUp } from "./helpers";
 
 beforeEach(async () => {
@@ -56,12 +57,16 @@ describe("/api/admin", () => {
         expect((await adminUser.PATCH(req("PATCH", { token, body: { plan: "free" } }), ctx("nope"))).status).toBe(404);
     });
 
-    it("DELETE removes a user but not the admin themself", async () => {
+    it("DELETE removes a user (and their Stripe customer) but not the admin themself", async () => {
         const { token, user: me } = await signUp("boss@test.dev");
         const { user } = await signUp();
+        await run(`UPDATE "user" SET "stripeCustomerId" = 'cus_2' WHERE id = ?`, [user.id]);
+        const del = vi.spyOn(stripe!.customers, "del").mockResolvedValue({} as never);
         expect((await adminUser.DELETE(req("DELETE", { token }), ctx(me.id))).status).toBe(400);
         expect((await adminUser.DELETE(req("DELETE", { token }), ctx(user.id))).status).toBe(200);
         expect(await get(`SELECT id FROM "user" WHERE id = ?`, [user.id])).toBeUndefined();
+        expect(del).toHaveBeenCalledWith("cus_2");
+        del.mockRestore();
         expect((await adminUser.DELETE(req("DELETE", { token }), ctx(user.id))).status).toBe(404);
     });
 

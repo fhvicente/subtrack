@@ -44,7 +44,6 @@ interface NotificationSettings {
     sms_enabled: number;
     push_enabled: number;
     days_before_renewal: number;
-    phone_number: string;
     created_at?: string;
     updated_at?: string;
 }
@@ -95,7 +94,6 @@ export default function SettingsPage() {
         smsEnabled: false,
         pushEnabled: false,
         daysBeforeRenewal: 3,
-        phoneNumber: "",
     });
 
     // Fetch subscription status
@@ -151,7 +149,6 @@ export default function SettingsPage() {
                     smsEnabled: notificationsData.sms_enabled === 1,
                     pushEnabled: notificationsData.push_enabled === 1,
                     daysBeforeRenewal: notificationsData.days_before_renewal,
-                    phoneNumber: notificationsData.phone_number || "",
                 });
             } catch (notifError) {
                 console.error(
@@ -241,10 +238,7 @@ export default function SettingsPage() {
                 days_before_renewal: parseInt(
                     notificationsForm.daysBeforeRenewal.toString()
                 ),
-                phone_number: notificationsForm.phoneNumber,
             };
-
-            console.log("Sending notification settings:", payload);
 
             await api.put("/notifications/settings", payload);
 
@@ -260,7 +254,6 @@ export default function SettingsPage() {
                     sms_enabled: payload.sms_enabled,
                     push_enabled: payload.push_enabled,
                     days_before_renewal: payload.days_before_renewal,
-                    phone_number: payload.phone_number,
                 });
             }
         } catch (error) {
@@ -270,6 +263,22 @@ export default function SettingsPage() {
             );
         } finally {
             setIsSavingNotifications(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        const ok = await confirm(
+            "Your subscriptions, settings and payment history are erased and any Premium plan stops billing right away. This can't be undone.",
+            { title: "Delete your account?", confirmLabel: "Delete account", destructive: true }
+        );
+        if (!ok) return;
+        try {
+            await api.delete("/users/profile");
+            // Full reload so every client-side auth state starts from scratch.
+            window.location.href = "/";
+        } catch (error) {
+            console.error("Error deleting account:", error);
+            alert("Unable to delete your account. Please try again later.");
         }
     };
 
@@ -377,38 +386,7 @@ export default function SettingsPage() {
                                 </p>
                             </div>
                         </li>
-                        <li className="flex items-start gap-3 py-4">
-                            <input
-                                type="checkbox"
-                                id="smsEnabled"
-                                aria-describedby="smsEnabled-hint"
-                                className={CHECKBOX}
-                                checked={notificationsForm.smsEnabled}
-                                onChange={handleNotificationChange}
-                            />
-                            <div>
-                                <label htmlFor="smsEnabled" className="cursor-pointer font-semibold text-ink">
-                                    SMS reminders
-                                </label>
-                                <p id="smsEnabled-hint" className="text-sm text-ink-soft">
-                                    Get a text before each renewal.
-                                </p>
-                            </div>
-                        </li>
                     </ul>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="phoneNumber">Phone number (for SMS)</Label>
-                        <Input
-                            id="phoneNumber"
-                            type="tel"
-                            autoComplete="tel"
-                            placeholder="+351 123 456 789"
-                            className="tabular-nums"
-                            value={notificationsForm.phoneNumber}
-                            onChange={handleNotificationChange}
-                        />
-                    </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="daysBeforeRenewal">Remind me</Label>
@@ -511,6 +489,35 @@ export default function SettingsPage() {
                             </Button>
                         </div>
                     )}
+                </div>
+            </section>
+
+            {/* Your data (RGPD Art. 15, 17, 20) */}
+            <section data-reveal aria-labelledby="data-heading" className={SECTION}>
+                <div>
+                    <h2 id="data-heading" className={H2}>Your data</h2>
+                    <p className="mt-2 text-sm text-ink-soft">
+                        Take it with you, or take it away. See the{" "}
+                        <a href="/privacy" className="underline underline-offset-4">privacy policy</a>.
+                    </p>
+                </div>
+                <div className="max-w-xl space-y-8">
+                    <div className="space-y-3">
+                        <p className="text-sm text-ink-soft">
+                            Everything we hold about you, as a JSON file.
+                        </p>
+                        <Button asChild variant="outline">
+                            <a href="/api/users/export" download>Download my data</a>
+                        </Button>
+                    </div>
+                    <div className="space-y-3 border-t border-ink/10 pt-6">
+                        <p className="text-sm text-ink-soft">
+                            Deletes your account and everything in it. A Premium plan is cancelled immediately.
+                        </p>
+                        <Button variant="destructive" onClick={handleDeleteAccount}>
+                            Delete account
+                        </Button>
+                    </div>
                 </div>
             </section>
         </div>

@@ -22,7 +22,7 @@ const layout = (body: string) => `
 
 export async function sendEmail(to: string, subject: string, text: string, html: string) {
     if (!configured) {
-        console.log(`[EMAIL SIMULATION] To: ${to}, Subject: ${subject}`);
+        console.log(`[EMAIL SIMULATION] Subject: ${subject}`); // no address: logs must not hold personal data
         return true;
     }
     try {

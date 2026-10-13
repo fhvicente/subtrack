@@ -116,8 +116,6 @@ export default function EditSubscriptionPage() {
                 status: formData.status,
             };
 
-            console.log("Updating subscription with data:", subscriptionData);
-
             await api.put(`/subscriptions/${subscriptionId}`, subscriptionData);
 
             // Show success message

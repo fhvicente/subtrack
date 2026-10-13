@@ -2,6 +2,7 @@ import { z } from "zod";
 import { get, query, run } from "@/server/db";
 import { forbidden, getUser, isAdmin, logAdmin, unauthorized } from "@/server/auth";
 import { parseBody } from "@/server/validate";
+import { deleteStripeCustomer } from "@/server/stripe";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,6 +16,7 @@ export async function GET(req: Request, { params }: Ctx) {
     const { id } = await params;
     const user = await get(`SELECT id, email, name, plan, "premiumUntil", "createdAt" AS created_at FROM "user" WHERE id = ?`, [id]);
     if (!user) return notFound();
+    logAdmin(admin, "view-user", id);
     const [subscriptions, payments] = await Promise.all([
         query(`SELECT id, name, price, due_date, status, category FROM subscriptions WHERE user_id = ? ORDER BY due_date`, [id]),
         query(`SELECT id, amount, status, plan, created_at FROM payment_logs WHERE user_id = ? ORDER BY created_at DESC`, [id]),
@@ -41,12 +43,16 @@ export async function PATCH(req: Request, { params }: Ctx) {
 }
 
 // Deletes the account and, via ON DELETE CASCADE, its subscriptions, settings and payment logs.
+// The Stripe customer goes first: if Stripe fails, nothing is deleted and the user isn't left being billed.
 export async function DELETE(req: Request, { params }: Ctx) {
     const admin = await getUser(req);
     if (!admin) return unauthorized();
     if (!isAdmin(admin)) return forbidden();
     const { id } = await params;
     if (id === admin.id) return Response.json({ error: "You can't delete your own account here" }, { status: 400 });
+    const user = await get(`SELECT "stripeCustomerId" FROM "user" WHERE id = ?`, [id]);
+    if (!user) return notFound();
+    await deleteStripeCustomer(user.stripeCustomerId);
     const { changes } = await run(`DELETE FROM "user" WHERE id = ?`, [id]);
     if (!changes) return notFound();
     logAdmin(admin, "delete-user", id);
