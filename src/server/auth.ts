@@ -16,12 +16,15 @@ export const currentUser = async () => userFrom(await headers());
 
 // Also expires the session cookie (both names better-auth uses: plain, and __Secure- over https),
 // so a stale cookie can't bounce the user between the proxy and the sign-in page.
-export function unauthorized() {
+export function clearSessionCookies() {
     const h = new Headers();
     h.append("Set-Cookie", "better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
     h.append("Set-Cookie", "__Secure-better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure");
-    return Response.json({ error: "Invalid or expired session" }, { status: 401, headers: h });
+    return h;
 }
+
+export const unauthorized = () =>
+    Response.json({ error: "Invalid or expired session" }, { status: 401, headers: clearSessionCookies() });
 
 // First hop of x-forwarded-for is the client on Vercel (the platform overwrites the header).
 export const clientIp = (req: Request) =>

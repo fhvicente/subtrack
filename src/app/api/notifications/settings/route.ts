@@ -12,7 +12,6 @@ const settingsSchema = z
         sms_enabled: toggle,
         push_enabled: toggle,
         days_before_renewal: z.int().min(1).max(30),
-        phone_number: z.string().trim().max(20).regex(/^[+\d\s()-]*$/, "Digits only").nullable(),
     })
     .partial();
 
@@ -44,15 +43,13 @@ export async function PUT(req: Request) {
 
     await run(
         `UPDATE notification_settings
-         SET email_enabled = ?, sms_enabled = ?, push_enabled = ?, days_before_renewal = ?,
-             phone_number = ?, updated_at = CURRENT_TIMESTAMP
+         SET email_enabled = ?, sms_enabled = ?, push_enabled = ?, days_before_renewal = ?, updated_at = CURRENT_TIMESTAMP
          WHERE user_id = ?`,
         [
             pick("email_enabled"),
             pick("sms_enabled"),
             pick("push_enabled"),
             pick("days_before_renewal"),
-            pick("phone_number"),
             user.id,
         ]
     );

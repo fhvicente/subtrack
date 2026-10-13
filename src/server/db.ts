@@ -84,7 +84,6 @@ CREATE TABLE IF NOT EXISTS notification_settings (
   sms_enabled INTEGER DEFAULT 0,
   push_enabled INTEGER DEFAULT 0,
   days_before_renewal INTEGER DEFAULT 3,
-  phone_number TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

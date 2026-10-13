@@ -222,6 +222,13 @@ export default function SignUpPage() {
                                 ? "Creating account..."
                                 : "Create account"}
                         </Button>
+                        <p className="text-xs text-ink-soft">
+                            We use your details only to run your account. See our{" "}
+                            <Link href="/privacy" className="underline underline-offset-4">
+                                privacy policy
+                            </Link>
+                            .
+                        </p>
                     </form>
 
                     <p data-reveal className="mt-8 text-sm text-ink-soft">
