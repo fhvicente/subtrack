@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { get, run } from "@/server/db";
+import { db } from "@/server/db";
 import { auth } from "@/server/better-auth";
+
+// Raw SQL for test setup and assertions, so they check the database itself rather than the app's queries.
+const raw = (text: string, params: unknown[] = []) => {
+    let n = 0;
+    return db.$client.query(text.replace(/\?/g, () => `$${++n}`), params);
+};
+export const run = (text: string, params?: unknown[]) => raw(text, params);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const get = async (text: string, params?: unknown[]): Promise<any> => (await raw(text, params)).rows[0];
 
 export const reset = () =>
     run(

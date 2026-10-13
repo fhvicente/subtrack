@@ -1,4 +1,6 @@
-import { query } from "@/server/db";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/server/db";
+import { notificationSettings, paymentLogs, session, subscriptions } from "@/server/schema";
 import { getUser, unauthorized } from "@/server/auth";
 
 // RGPD Art. 15 / 20: everything we hold about the user, as a JSON download.
@@ -6,15 +8,56 @@ import { getUser, unauthorized } from "@/server/auth";
 export async function GET(req: Request) {
     const user = await getUser(req);
     if (!user) return unauthorized();
-    const [subscriptions, notificationSettings, payments, sessions] = await Promise.all([
-        query(`SELECT id, name, description, due_date, price, status, category, created_at, updated_at
-               FROM subscriptions WHERE user_id = ? ORDER BY created_at`, [user.id]),
-        query(`SELECT email_enabled, sms_enabled, push_enabled, days_before_renewal, created_at, updated_at
-               FROM notification_settings WHERE user_id = ?`, [user.id]),
-        query(`SELECT id, amount, status, provider, plan, notes, created_at
-               FROM payment_logs WHERE user_id = ? ORDER BY created_at`, [user.id]),
-        query(`SELECT "ipAddress", "userAgent", "createdAt", "expiresAt"
-               FROM session WHERE "userId" = ? ORDER BY "createdAt"`, [user.id]),
+    const [subs, settings, payments, sessions] = await Promise.all([
+        db
+            .select({
+                id: subscriptions.id,
+                name: subscriptions.name,
+                description: subscriptions.description,
+                due_date: subscriptions.due_date,
+                price: subscriptions.price,
+                status: subscriptions.status,
+                category: subscriptions.category,
+                created_at: subscriptions.created_at,
+                updated_at: subscriptions.updated_at,
+            })
+            .from(subscriptions)
+            .where(eq(subscriptions.user_id, user.id))
+            .orderBy(asc(subscriptions.created_at)),
+        db
+            .select({
+                email_enabled: notificationSettings.email_enabled,
+                sms_enabled: notificationSettings.sms_enabled,
+                push_enabled: notificationSettings.push_enabled,
+                days_before_renewal: notificationSettings.days_before_renewal,
+                created_at: notificationSettings.created_at,
+                updated_at: notificationSettings.updated_at,
+            })
+            .from(notificationSettings)
+            .where(eq(notificationSettings.user_id, user.id)),
+        db
+            .select({
+                id: paymentLogs.id,
+                amount: paymentLogs.amount,
+                status: paymentLogs.status,
+                provider: paymentLogs.provider,
+                plan: paymentLogs.plan,
+                notes: paymentLogs.notes,
+                created_at: paymentLogs.created_at,
+            })
+            .from(paymentLogs)
+            .where(eq(paymentLogs.user_id, user.id))
+            .orderBy(asc(paymentLogs.created_at)),
+        db
+            .select({
+                ipAddress: session.ipAddress,
+                userAgent: session.userAgent,
+                createdAt: session.createdAt,
+                expiresAt: session.expiresAt,
+            })
+            .from(session)
+            .where(eq(session.userId, user.id))
+            .orderBy(asc(session.createdAt)),
     ]);
     const data = {
         exportedAt: new Date().toISOString(),
@@ -28,8 +71,8 @@ export async function GET(req: Request) {
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
         },
-        subscriptions,
-        notificationSettings: notificationSettings[0] ?? null,
+        subscriptions: subs,
+        notificationSettings: settings[0] ?? null,
         payments,
         sessions,
     };

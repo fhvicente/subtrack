@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type Stripe from "stripe";
-import { get, run } from "@/server/db";
+import { eq } from "drizzle-orm";
+import { db } from "@/server/db";
+import { paymentLogs, user } from "@/server/schema";
 import { paymentsDisabled, stripe } from "@/server/stripe";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -27,16 +29,18 @@ export async function POST(req: Request) {
             const plan = session.metadata?.plan;
             if (!userId || session.payment_status !== "paid") break;
 
-            const premiumUntil = new Date(Date.now() + 30 * DAY);
-            await run(`UPDATE "user" SET plan = ?, "premiumUntil" = ? WHERE id = ?`, [
-                "premium",
-                premiumUntil.toISOString(),
-                userId,
-            ]);
-            await run(
-                `INSERT INTO payment_logs (id, user_id, amount, status, "stripeSessionId", plan) VALUES (?, ?, ?, ?, ?, ?)`,
-                [randomUUID(), userId, (session.amount_total ?? 0) / 100, "success", session.id, plan]
-            );
+            await db
+                .update(user)
+                .set({ plan: "premium", premiumUntil: new Date(Date.now() + 30 * DAY) })
+                .where(eq(user.id, userId));
+            await db.insert(paymentLogs).values({
+                id: randomUUID(),
+                user_id: userId,
+                amount: (session.amount_total ?? 0) / 100,
+                status: "success",
+                stripeSessionId: session.id,
+                plan,
+            });
             break;
         }
         // Every paid invoice, renewals included, extends premium to the end of the billed period.
@@ -44,28 +48,35 @@ export async function POST(req: Request) {
             const invoice = event.data.object;
             const periodEnd = invoice.lines.data[0]?.period.end;
             if (periodEnd) {
-                await run(`UPDATE "user" SET plan = 'premium', "premiumUntil" = ? WHERE "stripeCustomerId" = ?`, [
-                    new Date(periodEnd * 1000).toISOString(),
-                    String(invoice.customer),
-                ]);
+                await db
+                    .update(user)
+                    .set({ plan: "premium", premiumUntil: new Date(periodEnd * 1000) })
+                    .where(eq(user.stripeCustomerId, String(invoice.customer)));
             }
             break;
         }
         case "invoice.payment_failed": {
             const invoice = event.data.object;
-            const user = await get(`SELECT id FROM "user" WHERE "stripeCustomerId" = ?`, [String(invoice.customer)]);
-            if (user) {
-                await run(
-                    `INSERT INTO payment_logs (id, user_id, amount, status, "stripeSessionId") VALUES (?, ?, ?, ?, ?)`,
-                    [randomUUID(), user.id, (invoice.amount_due ?? 0) / 100, "failed", invoice.id]
-                );
+            const [customer] = await db
+                .select({ id: user.id })
+                .from(user)
+                .where(eq(user.stripeCustomerId, String(invoice.customer)));
+            if (customer) {
+                await db.insert(paymentLogs).values({
+                    id: randomUUID(),
+                    user_id: customer.id,
+                    amount: (invoice.amount_due ?? 0) / 100,
+                    status: "failed",
+                    stripeSessionId: invoice.id,
+                });
             }
             break;
         }
         case "customer.subscription.deleted": {
-            await run(`UPDATE "user" SET plan = 'free', "premiumUntil" = NULL WHERE "stripeCustomerId" = ?`, [
-                String(event.data.object.customer),
-            ]);
+            await db
+                .update(user)
+                .set({ plan: "free", premiumUntil: null })
+                .where(eq(user.stripeCustomerId, String(event.data.object.customer)));
             break;
         }
     }

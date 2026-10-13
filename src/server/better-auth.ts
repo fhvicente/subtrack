@@ -1,16 +1,16 @@
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { pool, rateLimited } from "./db";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db, rateLimited } from "./db";
+import { account, rateLimit, session, user, verification } from "./schema";
 
 const FIFTEEN_MIN = 15 * 60;
 
 export const auth = betterAuth({
-    database: pool,
+    database: drizzleAdapter(db, { provider: "pg", schema: { user, session, account, verification, rateLimit } }),
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
     emailAndPassword: { enabled: true },
-    // Its schema check runs at import, before ensureSchema (db.ts) has created the tables, and a failure is cached.
-    advanced: { database: { validateSchema: false } },
     // Billing state lives on the user; input: false so sign-up / update-user can't set it.
     user: {
         additionalFields: {

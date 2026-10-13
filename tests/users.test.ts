@@ -5,9 +5,8 @@ import * as notifTest from "@/app/api/notifications/test/route";
 import * as exportData from "@/app/api/users/export/route";
 import * as subs from "@/app/api/subscriptions/route";
 import * as cron from "@/app/api/cron/renewals/route";
-import { get, run } from "@/server/db";
 import { stripe } from "@/server/stripe";
-import { req, reset, signUp } from "./helpers";
+import { get, req, reset, run, signUp } from "./helpers";
 
 beforeEach(reset);
 afterEach(() => vi.restoreAllMocks());

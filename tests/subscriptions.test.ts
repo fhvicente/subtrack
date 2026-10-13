@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import * as list from "@/app/api/subscriptions/route";
 import * as item from "@/app/api/subscriptions/[id]/route";
-import { run } from "@/server/db";
 import { FREE_PLAN_LIMIT } from "@/lib/subscription-schema";
-import { ctx, inDays, req, reset, signUp } from "./helpers";
+import { ctx, inDays, req, reset, run, signUp } from "./helpers";
 
 beforeEach(reset);
 

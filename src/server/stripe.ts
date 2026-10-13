@@ -8,7 +8,7 @@ export const stripe = key?.startsWith("sk_") ? new Stripe(key) : null;
 export const paymentsDisabled = () =>
     Response.json({ message: "Payments are not configured" }, { status: 503 });
 
-export const isPremiumActive = (user: { plan?: string; premiumUntil?: string | null }) =>
+export const isPremiumActive = (user: { plan?: string; premiumUntil?: Date | string | null }) =>
     user.plan === "premium" && !!user.premiumUntil && new Date(user.premiumUntil) > new Date();
 
 // Deleting the Stripe customer also cancels its subscriptions immediately, so a deleted account is never billed again.

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { get, run } from "@/server/db";
+import { eq, sql } from "drizzle-orm";
+import { db } from "@/server/db";
+import { notificationSettings } from "@/server/schema";
 import { getUser, unauthorized } from "@/server/auth";
 import { parseBody } from "@/server/validate";
 
@@ -15,16 +17,16 @@ const settingsSchema = z
     })
     .partial();
 
-const settingsOf = (userId: string) =>
-    get("SELECT * FROM notification_settings WHERE user_id = ?", [userId]);
+const ofUser = (userId: string) => eq(notificationSettings.user_id, userId);
+const toInt = (v: boolean | number | undefined) => (v === undefined ? undefined : Number(v));
 
 // Creates default settings on first access.
 async function ensureSettings(userId: string) {
-    await run("INSERT INTO notification_settings (id, user_id) VALUES (?, ?) ON CONFLICT (user_id) DO NOTHING", [
-        randomUUID(),
-        userId,
-    ]);
-    return (await settingsOf(userId))!;
+    await db
+        .insert(notificationSettings)
+        .values({ id: randomUUID(), user_id: userId })
+        .onConflictDoNothing({ target: notificationSettings.user_id });
+    return (await db.select().from(notificationSettings).where(ofUser(userId)))[0];
 }
 
 export async function GET(req: Request) {
@@ -38,20 +40,18 @@ export async function PUT(req: Request) {
     if (!user) return unauthorized();
     const body = await parseBody(req, settingsSchema);
     if (body instanceof Response) return body;
-    const current = await ensureSettings(user.id);
-    const pick = (key: keyof typeof body) => (body[key] !== undefined ? body[key] : current[key]);
-
-    await run(
-        `UPDATE notification_settings
-         SET email_enabled = ?, sms_enabled = ?, push_enabled = ?, days_before_renewal = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = ?`,
-        [
-            pick("email_enabled"),
-            pick("sms_enabled"),
-            pick("push_enabled"),
-            pick("days_before_renewal"),
-            user.id,
-        ]
-    );
-    return Response.json(await settingsOf(user.id));
+    await ensureSettings(user.id);
+    // Fields left undefined are skipped by Drizzle, so they keep their current value.
+    const [updated] = await db
+        .update(notificationSettings)
+        .set({
+            email_enabled: toInt(body.email_enabled),
+            sms_enabled: toInt(body.sms_enabled),
+            push_enabled: toInt(body.push_enabled),
+            days_before_renewal: body.days_before_renewal,
+            updated_at: sql`now()`,
+        })
+        .where(ofUser(user.id))
+        .returning();
+    return Response.json(updated);
 }

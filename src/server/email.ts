@@ -1,5 +1,7 @@
 import sgMail from "@sendgrid/mail";
-import { query, type Row } from "./db";
+import { and, eq, getTableColumns } from "drizzle-orm";
+import { db } from "./db";
+import { notificationSettings, subscriptions, user } from "./schema";
 
 const apiKey = process.env.SENDGRID_API_KEY;
 const configured = !!apiKey?.startsWith("SG.");
@@ -34,7 +36,7 @@ export async function sendEmail(to: string, subject: string, text: string, html:
     }
 }
 
-export function sendTestEmail(user: Row) {
+export function sendTestEmail(user: { name: string; email: string }) {
     const text = `Olá ${user.name || ""},\n\nEste é um teste de notificação por email do Gestor Simples de Assinaturas.\n\nSe você recebeu este email, suas notificações estão configuradas corretamente.`;
     return sendEmail(
         user.email,
@@ -48,7 +50,9 @@ export function sendTestEmail(user: Row) {
     );
 }
 
-function sendRenewalEmail(sub: Row) {
+type Renewal = Awaited<ReturnType<typeof upcoming>>[number];
+
+function sendRenewalEmail(sub: Renewal) {
     const date = new Date(sub.due_date).toLocaleDateString("pt-BR");
     const price = Number(sub.price).toFixed(2);
     const text = `Olá ${sub.userName || ""},\n\nSua assinatura de ${sub.name} irá renovar em ${date}. O valor da renovação é de R$ ${price}.\n\nAcesse sua conta para gerenciar esta assinatura.`;
@@ -72,14 +76,21 @@ function sendRenewalEmail(sub: Row) {
 }
 
 // ponytail: no "already sent" log; relies on running once a day. Add a sent_notifications table if the cron can fire more often.
+const upcoming = () =>
+    db
+        .select({
+            ...getTableColumns(subscriptions),
+            userName: user.name,
+            userEmail: user.email,
+            days_before_renewal: notificationSettings.days_before_renewal,
+        })
+        .from(subscriptions)
+        .innerJoin(user, eq(subscriptions.user_id, user.id))
+        .innerJoin(notificationSettings, eq(notificationSettings.user_id, user.id))
+        .where(and(eq(subscriptions.status, "active"), eq(notificationSettings.email_enabled, 1)));
+
 export async function checkUpcomingRenewals() {
-    const subs = await query(
-        `SELECT s.*, u.name AS "userName", u.email AS "userEmail", ns.days_before_renewal
-         FROM subscriptions s
-         JOIN "user" u ON s.user_id = u.id
-         JOIN notification_settings ns ON ns.user_id = u.id
-         WHERE s.status = 'active' AND ns.email_enabled = 1`
-    );
+    const subs = await upcoming();
     const now = Date.now();
     let sent = 0;
     for (const sub of subs) {

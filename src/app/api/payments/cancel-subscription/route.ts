@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { run } from "@/server/db";
+import { eq } from "drizzle-orm";
+import { db } from "@/server/db";
+import { paymentLogs, user as users } from "@/server/schema";
 import { getUser, unauthorized } from "@/server/auth";
 import { stripe } from "@/server/stripe";
 
@@ -24,13 +26,13 @@ export async function POST(req: Request) {
         }
     }
 
-    await run(`UPDATE "user" SET plan = 'free' WHERE id = ?`, [user.id]);
-    await run("INSERT INTO payment_logs (id, user_id, amount, status, notes) VALUES (?, ?, ?, ?, ?)", [
-        randomUUID(),
-        user.id,
-        0,
-        "canceled",
-        "Subscription canceled by user",
-    ]);
+    await db.update(users).set({ plan: "free" }).where(eq(users.id, user.id));
+    await db.insert(paymentLogs).values({
+        id: randomUUID(),
+        user_id: user.id,
+        amount: 0,
+        status: "canceled",
+        notes: "Subscription canceled by user",
+    });
     return Response.json({ success: true, message: "Subscription has been canceled successfully." });
 }

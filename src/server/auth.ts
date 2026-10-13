@@ -1,12 +1,15 @@
 import { headers } from "next/headers";
 import { auth } from "./better-auth";
-import { ensureSchema, get } from "./db";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
+import { user } from "./schema";
 
 // The full "user" row (plan, premiumUntil, stripeCustomerId, ...) behind the session cookie, or null.
 async function userFrom(h: Headers) {
-    await ensureSchema();
     const session = await auth.api.getSession({ headers: h });
-    return session ? ((await get(`SELECT * FROM "user" WHERE id = ?`, [session.user.id])) ?? null) : null;
+    if (!session) return null;
+    const [row] = await db.select().from(user).where(eq(user.id, session.user.id));
+    return row ?? null;
 }
 
 export const getUser = (req: Request) => userFrom(req.headers);

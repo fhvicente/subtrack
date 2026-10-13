@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as admin from "@/app/api/admin/route";
 import * as adminUser from "@/app/api/admin/users/[id]/route";
 import * as renewals from "@/app/api/admin/renewals/route";
-import { get, run } from "@/server/db";
 import { stripe } from "@/server/stripe";
-import { ctx, inDays, req, reset, signUp } from "./helpers";
+import { ctx, get, inDays, req, reset, run, signUp } from "./helpers";
 
 beforeEach(async () => {
     await reset();
